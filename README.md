@@ -23,13 +23,13 @@ The program waits for a key press before stopping the Spark context, so the Spar
 
 ## Tech Stack
 
-| Component                 | Version          |
-| ------------------------- | ---------------- |
-| Java                      | 21               |
-| Apache Spark (Core + SQL) | 4.1.1            |
-| Scala binary              | 2.13             |
-| Log4j2                    | 2.20.0           |
-| Gradle                    | Wrapper included |
+| Component                 | Version                  |
+| ------------------------- | ------------------------ |
+| Java                      | 21                       |
+| Apache Spark (Core + SQL) | 4.1.1                    |
+| Scala binary              | 2.13                     |
+| Log4j2                    | 2.20.0                   |
+| Gradle                    | 9.4.1 (Wrapper included) |
 
 ## Project Structure
 
