@@ -1,0 +1,49 @@
+# Gradle
+.gradle/
+build/
+
+# IntelliJ
+.idea/
+*.iml
+
+# VSCode
+.vscode/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# NetBeans
+nbproject/
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Logs
+*.log
+
+# Java
+*.class
+
+# JAR files
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Target
+target/
+
+# WAR files
+*.war
+
+# Spark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Temporary files
+tmp/
+temp/
