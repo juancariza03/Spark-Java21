@@ -23,13 +23,13 @@ The program waits for a key press before stopping the Spark context, so the Spar
 
 ## Tech Stack
 
-| Component | Version |
-|-----------|---------|
-| Java      | 21      |
-| Apache Spark (Core + SQL) | 4.1.1 |
-| Scala binary | 2.13 |
-| Log4j2    | 2.20.0  |
-| Gradle    | Wrapper included |
+| Component                 | Version          |
+| ------------------------- | ---------------- |
+| Java                      | 21               |
+| Apache Spark (Core + SQL) | 4.1.1            |
+| Scala binary              | 2.13             |
+| Log4j2                    | 2.20.0           |
+| Gradle                    | Wrapper included |
 
 ## Project Structure
 
@@ -41,14 +41,14 @@ ProyectoSpark/
 └── src/main/
     ├── java/com/spark/
     │   ├── Main.java        # Entry point: SparkSession + DataFrame ops
-    │   └── Person.java      # POJO used as the DataFrame schema source
+    │   └── Person.java      # Java record + explicit JavaBean getters for Spark's bean encoder
     └── resources/
         └── log4j2.properties # Silences Spark/Hadoop/Jetty logs
 ```
 
 ## How It Works
 
-- `Person` is a serializable POJO with `name`, `age`, and `department`. Spark uses its getters via bean encoding to infer the DataFrame schema.
+- `Person` is a Java `record` with components `name`, `age`, and `department`. It also declares explicit `getName()`, `getAge()` and `getDepartment()` methods. Spark's bean introspector only recognises JavaBean-style accessors (`getX` or `isX`), and the record's canonical accessors (`name()`, `age()`, `department()`) do not match that convention. Without those getters, `createDataFrame(people, Person.class)` produces an empty schema and column references like `col("department")` fail to resolve.
 - `Main` builds the `SparkSession` in local mode, creates the DataFrame with `spark.createDataFrame(people, Person.class)`, and chains Spark SQL functions (`col`, `avg`) for the queries.
 - `log4j2.properties` sets the root level to `OFF` so only the application's own `log.info` headers and Spark's `show()` tables are printed.
 
