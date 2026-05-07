@@ -22,6 +22,8 @@ def scalaBinaryVersion = '2.13'
 dependencies {
     implementation "org.apache.spark:spark-core_${scalaBinaryVersion}:${sparkVersion}"
     implementation "org.apache.spark:spark-sql_${scalaBinaryVersion}:${sparkVersion}"
+    implementation "org.apache.spark:spark-mllib_${scalaBinaryVersion}:${sparkVersion}"
+    implementation "org.apache.spark:spark-streaming_${scalaBinaryVersion}:${sparkVersion}"
 
     implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
     implementation 'org.apache.logging.log4j:log4j-api:2.20.0'
