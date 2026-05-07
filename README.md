@@ -1,6 +1,6 @@
 # ProyectoSpark
 
-A minimal Apache Spark demo written in Java that loads the UCI _Adult_ dataset from a CSV file into a `Dataset<Row>` and runs basic schema inspection and aggregation through a dedicated `Analysis` helper.
+A Java demo of **Apache Spark Structured Streaming** that simulates a continuous CSV feed: it splits the UCI _Adult_ dataset into chunks, drips them into a watched directory on a schedule, and a Spark streaming query persists every micro-batch as Parquet. When the user presses `Enter`, the same job re-reads the Parquet output in batch mode and runs an aggregation through a dedicated `Analysis` helper.
 
 ## Table of Contents
 
@@ -9,18 +9,19 @@ A minimal Apache Spark demo written in Java that loads the UCI _Adult_ dataset f
 - [Project Structure](#project-structure)
 - [Dataset](#dataset)
 - [How It Works](#how-it-works)
+- [Runtime Layout](#runtime-layout)
+- [Configuration Constants](#configuration-constants)
 - [Run on Windows](#run-on-windows)
 - [Expected Output](#expected-output)
 
 ## Overview
 
-The application boots a local `SparkSession` (`local[*]`), reads `src/main/resources/adult.csv` with header inference and schema inference enabled, and demonstrates three operations:
+The application boots a local `SparkSession` (`local[*]`) and orchestrates two phases:
 
-1. Print the inferred schema.
-2. Show the first rows of the dataset.
-3. Count records grouped by the `income` column via `Analysis.incomes(dataset)`.
+1. **Streaming phase.** A scheduled feeder moves pre-split CSV chunks into `build/stream/input/` one at a time. A `readStream` query picks them up and writes them to `build/stream/output/` as Parquet, with checkpointing in `build/stream/checkpoint/`.
+2. **Batch phase.** When the user presses `Enter`, the job reads the Parquet output back, logs its row count, prints the schema and a sample, and delegates aggregation to `Analysis.incomes(dataset)` to count records per `income` bucket.
 
-The program waits for a key press before stopping the Spark context, so the Spark UI at `http://localhost:4040` remains reachable while inspecting the run.
+The program then waits for a second key press before stopping the Spark context, so the Spark UI at `http://localhost:4040` remains reachable while inspecting the run.
 
 ## Tech Stack
 
@@ -41,7 +42,7 @@ ProyectoSpark/
 ├── gradlew / gradlew.bat
 └── src/main/
     ├── java/com/spark/
-    │   ├── Main.java        # Entry point: SparkSession + CSV load + orchestration
+    │   ├── Main.java        # Entry point: streaming feeder + readStream/writeStream + batch re-read
     │   └── Analysis.java    # Reusable Spark SQL transformations
     └── resources/
         ├── adult.csv         # UCI Adult dataset
@@ -74,9 +75,38 @@ Spark infers numeric columns (`age`, `fnlwgt`, `education-num`, `capital-gain`, 
 
 ## How It Works
 
-- `Main` builds the `SparkSession` in local mode and loads the CSV. The path constant `INPUT_CSV_FILE_PATH` points at `src/main/resources/adult.csv`. `Main` delegates aggregation to `Analysis.incomes(dataset)`, keeping I/O concerns separated from query logic.
-- `Analysis.incomes(dataset)` returns a count of records per income bucket.
-- `log4j2.properties` sets the root level to `OFF` so only the application's own `log.info` headers and Spark's `show()` tables are printed.
+1. **`resetStreamDirs()`** recursively clears `build/stream/` (if any) and recreates the four working directories: `staged/`, `input/`, `output/`, `checkpoint/`. This guarantees a clean run every time.
+2. **`splitCsv(source, stagingDir, CHUNK_SIZE)`** reads `adult.csv` once, preserves its header on every chunk, and writes contiguous slices of `CHUNK_SIZE` rows into `staged/chunk-000.csv`, `chunk-001.csv`, …
+3. **`spark.readStream()`** opens a streaming `Dataset<Row>` over `input/`, applying `adultSchema()` and `maxFilesPerTrigger=1` so each micro-batch consumes exactly one chunk.
+4. **`writeStream()`** sinks the stream to Parquet under `output/`, using `checkpoint/` for offsets and append output mode.
+5. **`startChunkFeeder(chunks)`** schedules a single-threaded `ScheduledExecutorService` (daemon thread `chunk-feeder`) that moves one staged chunk into `input/` every `FEED_INTERVAL_SECONDS` seconds (after a 1-second initial delay), simulating a slow producer.
+6. **User-gated batch read**, when the user presses `Enter`, `spark.read().parquet(output/)` re-reads everything that the stream has persisted so far, logs the row count, prints the schema and a sample, and finally calls `Analysis.incomes(batchResult).show()`.
+7. **Shutdown** — a second `System.in.read()` keeps Spark alive (and the UI reachable) until the user presses `Enter` again, at which point `spark.stop()` runs.
+
+## Runtime Layout
+
+While the application runs, it creates and uses the following directory tree (relative to the project root):
+
+```
+build/stream/
+├── staged/        # CSV chunks waiting to be fed
+├── input/         # Watched by readStream — one file per micro-batch
+├── output/        # Parquet sink written by writeStream
+└── checkpoint/    # Structured Streaming checkpoint state
+```
+
+This whole tree is wiped and recreated at the start of each run.
+
+## Configuration Constants
+
+Defined at the top of `Main.java` and easy to tweak:
+
+| Constant                | Default                        | Purpose                                   |
+| ----------------------- | ------------------------------ | ----------------------------------------- |
+| `SOURCE_CSV`            | `src/main/resources/adult.csv` | Source file to be split into chunks       |
+| `STREAM_BASE`           | `build/stream`                 | Root of all runtime streaming directories |
+| `CHUNK_SIZE`            | `5000`                         | Rows per generated chunk                  |
+| `FEED_INTERVAL_SECONDS` | `3`                            | Delay between chunk drops into `input/`   |
 
 ## Run on Windows
 
@@ -86,7 +116,7 @@ From the project root, execute:
 ./gradlew run -q
 ```
 
-The `-q` flag suppresses Gradle's own progress output, leaving only the application's tables on the console. Press `Enter` in the terminal when you want the program to stop the Spark context and exit.
+The `-q` flag suppresses Gradle's own progress output, leaving only the application's tables on the console. Press `Enter` once when you want to trigger the batch re-read of the Parquet output, and a second time to stop the Spark context and exit.
 
 ## Expected Output
 
@@ -135,7 +165,7 @@ only showing top 20 rows
 +------+-----+
 |income|count|
 +------+-----+
-| <=50K|37155|
-|  >50K|11687|
+| <=50K| ... |
+|  >50K| ... |
 +------+-----+
 ```
